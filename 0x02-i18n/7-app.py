@@ -1,27 +1,17 @@
 #!/usr/bin/env python3
-"""
-task 7 answer
-"""
-from flask import (
-    Flask,
-    render_template,
-    request,
-    g
-)
+'''Task 7: Infer appropriate time zone
+'''
+
+from typing import Dict, Union
+from flask import Flask, render_template, request, g
 from flask_babel import Babel
-from datetime import timezone as tmzn
-from pytz import timezone
-import pytz.exceptions
-from typing import (
-    Dict,
-    Union
-)
+import pytz
 
 
-class Config(object):
-    """
-    Configuration for Babel
-    """
+class Config:
+    '''Config class'''
+
+    DEBUG = True
     LANGUAGES = ["en", "fr"]
     BABEL_DEFAULT_LOCALE = "en"
     BABEL_DEFAULT_TIMEZONE = "UTC"
@@ -29,8 +19,8 @@ class Config(object):
 
 app = Flask(__name__)
 app.config.from_object(Config)
+app.url_map.strict_slashes = False
 babel = Babel(app)
-
 
 users = {
     1: {"name": "Balou", "locale": "fr", "timezone": "Europe/Paris"},
@@ -41,71 +31,67 @@ users = {
 
 
 def get_user() -> Union[Dict, None]:
+    """Retrieves a user based on a user id.
     """
-    Returns a user dictionary or None if ID value can't be found
-    or if 'login_as' URL parameter was not found
-    """
-    id = request.args.get('login_as', None)
-    if id and int(id) in users.keys():
-        return users.get(int(id))
+    login_id = request.args.get('login_as')
+    if login_id:
+        return users.get(int(login_id))
     return None
 
 
 @app.before_request
-def before_request():
+def before_request() -> None:
+    """Performs some routines before each request's resolution.
     """
-    Add user to flask.g if user is found
-    """
-    user = get_user()
-    g.user = user
+
+    g.user = get_user()
 
 
 @babel.localeselector
-def get_locale():
+def get_locale() -> str:
+    """Retrieves the locale for a web page.
+
+    Returns:
+        str: best match
     """
-    Select and return best language match based on supported languages
-    """
-    loc = request.args.get('locale')
-    if loc in app.config['LANGUAGES']:
-        return loc
-    if g.user:
-        loc = g.user.get('locale')
-        if loc and loc in app.config['LANGUAGES']:
-            return loc
-    loc = request.headers.get('locale', None)
-    if loc in app.config['LANGUAGES']:
-        return loc
+    locale = request.args.get('locale')
+    if locale in app.config['LANGUAGES']:
+        return locale
+    if g.user and g.user['locale'] in app.config["LANGUAGES"]:
+        return g.user['locale']
+    header_locale = request.headers.get('locale', '')
+    if header_locale in app.config["LANGUAGES"]:
+        return header_locale
     return request.accept_languages.best_match(app.config['LANGUAGES'])
 
 
 @babel.timezoneselector
-def get_timezone():
+def get_timezone() -> str:
+    """Retrieves the timezone for a web page.
     """
-    Select and return appropriate timezone
-    """
-    tzone = request.args.get('timezone', None)
-    if tzone:
-        try:
-            return timezone(tzone).zone
-        except pytz.exceptions.UnknownTimeZoneError:
-            pass
-    if g.user:
-        try:
-            tzone = g.user.get('timezone')
-            return timezone(tzone).zone
-        except pytz.exceptions.UnknownTimeZoneError:
-            pass
-    dflt = app.config['BABEL_DEFAULT_TIMEZONE']
-    return dflt
+    timezone = request.args.get('timezone', '').strip()
+    if not timezone and g.user:
+        timezone = g.user['timezone']
+    try:
+        return pytz.timezone(timezone).zone
+    except pytz.exceptions.UnknownTimeZoneError:
+        return app.config['BABEL_DEFAULT_TIMEZONE']
 
 
-@app.route('/', strict_slashes=False)
+@app.route('/')
 def index() -> str:
-    """
-    Handles / route
-    """
-    return render_template('5-index.html')
+    '''default route
+
+    Returns:
+        html: homepage
+    '''
+    return render_template("7-index.html")
+
+# uncomment this line and comment the @babel.localeselector
+# you get this error:
+# AttributeError: 'Babel' object has no attribute 'localeselector'
+# babel.init_app(app, locale_selector=get_locale)
 
 
 if __name__ == "__main__":
-    app.run(port="5000", host="0.0.0.0", debug=True)
+    app.run()
